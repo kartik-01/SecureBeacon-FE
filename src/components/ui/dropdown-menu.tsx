@@ -41,8 +41,8 @@ function DropdownMenuContent({
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
-        className={cn(
-          "bg-slate-900 text-slate-100 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] overflow-hidden rounded-md border border-emerald-500/30 p-1 shadow-lg",
+          className={cn(
+          "bg-slate-900 text-slate-100 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-[100] min-w-[8rem] overflow-hidden rounded-md border border-emerald-500/30 p-1 shadow-lg",
           className,
         )}
         {...props}
@@ -66,7 +66,7 @@ function DropdownMenuItem({
       data-inset={inset}
       data-variant={variant}
       className={cn(
-        "focus:bg-emerald-500/20 focus:text-emerald-400 data-[variant=destructive]:text-red-400 data-[variant=destructive]:focus:bg-red-500/20 relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8",
+        "focus:bg-emerald-500/20 focus:text-emerald-400 data-[variant=destructive]:text-red-400 data-[variant=destructive]:focus:bg-red-500/20 data-[variant=destructive]:hover:bg-red-500/20 data-[variant=destructive]:hover:text-red-300 relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8",
         className,
       )}
       {...props}
@@ -99,7 +99,7 @@ function DropdownMenuLabel({
       data-slot="dropdown-menu-label"
       data-inset={inset}
       className={cn(
-        "px-2 py-1.5 text-sm font-medium text-slate-300 data-[inset]:pl-8",
+        "px-2 py-1.5 text-sm font-medium text-slate-300 data-[inset]:pl-8 break-words overflow-wrap-anywhere",
         className,
       )}
       {...props}

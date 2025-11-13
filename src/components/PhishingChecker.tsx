@@ -229,7 +229,7 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
     <div className="min-h-screen bg-black text-emerald-400">
       
       {/* Header */}
-      <div className="border-b border-emerald-500/30 bg-slate-900/80 backdrop-blur">
+      <div className="border-b border-emerald-500/30 bg-slate-900/80 backdrop-blur relative z-10">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button 
@@ -242,7 +242,7 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
             </Button>
             <div className="flex items-center gap-2">
               <Shield className="w-6 h-6 text-emerald-400" />
-              <h1 className="text-2xl font-mono text-slate-50">PhishSafe</h1>
+              <h1 className="text-2xl font-mono text-slate-50">SecureBeacon</h1>
             </div>
           </div>
           
@@ -265,6 +265,7 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
+                      type="button"
                       variant="outline"
                       className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 flex items-center gap-2"
                     >
@@ -274,13 +275,20 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
                       </span>
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuLabel className="font-mono">
-                      {user?.email || 'User Account'}
+                  <DropdownMenuContent align="end" className="w-64">
+                    <DropdownMenuLabel className="font-mono break-words">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-slate-400 text-xs">Logged in as</span>
+                        <span className="text-slate-200 break-words">{user?.email || 'User Account'}</span>
+                      </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
-                      onClick={logout}
+                      variant="destructive"
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        logout();
+                      }}
                       className="cursor-pointer"
                     >
                       <LogOut className="w-4 h-4 mr-2" />

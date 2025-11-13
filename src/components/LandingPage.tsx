@@ -57,12 +57,12 @@ export function LandingPage({ onStartCheck, onAuth }: LandingPageProps) {
           <div className="flex items-center justify-center gap-4 mb-6">
             <Shield className="w-16 h-16 text-emerald-400" />
             <h1 className="text-6xl text-slate-50">
-              <DecryptedText text="PhishSafe" />
+              <DecryptedText speed={50} text="PhishSafe" />
             </h1>
           </div>
           
           <p className="text-xl text-slate-200 font-mono">
-            <DecryptedText text="Intelligent Email Protection System" />
+            <DecryptedText speed={50} text="Intelligent Email Protection System" />
           </p>
         </motion.div>
 
@@ -70,7 +70,7 @@ export function LandingPage({ onStartCheck, onAuth }: LandingPageProps) {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 1, duration: 1 }}
+          transition={{ delay: 0.3, duration: 0.5 }}
           className="max-w-3xl mx-auto mb-12 bg-slate-900/80 border border-emerald-500/30 p-6 rounded-lg shadow-lg shadow-emerald-500/10"
           onMouseEnter={() => setShowTerminal(true)}
         >
@@ -88,7 +88,7 @@ export function LandingPage({ onStartCheck, onAuth }: LandingPageProps) {
         <motion.div 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 1.5, duration: 0.8 }}
+          transition={{ delay: 0.5, duration: 0.5 }}
           className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12"
         >
           <Button 
@@ -113,7 +113,7 @@ export function LandingPage({ onStartCheck, onAuth }: LandingPageProps) {
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 2, duration: 0.8 }}
+          transition={{ delay: 0.7, duration: 0.5 }}
           className="grid md:grid-cols-3 gap-6 mb-12 max-w-5xl mx-auto"
         >
           <div className="bg-slate-900/60 border border-emerald-500/30 p-6 rounded-lg hover:border-emerald-500 transition-all hover:shadow-lg hover:shadow-emerald-500/20">
@@ -145,7 +145,7 @@ export function LandingPage({ onStartCheck, onAuth }: LandingPageProps) {
         <motion.p 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 2.5 }}
+          transition={{ delay: 0.9 }}
           className="text-center mt-12 text-emerald-400/50 font-mono text-sm"
         >
           Guest mode: Instant analysis • No logs • No data stored
