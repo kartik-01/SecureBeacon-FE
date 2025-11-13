@@ -1,9 +1,6 @@
 import type {
   MLPredictRequest,
   MLPredictResponse,
-  SubmitHeaderRequest,
-  SubmitHeaderResponse,
-  UploadFileResponse,
   Analysis,
 } from '@/types/api';
 
@@ -65,26 +62,44 @@ export const mlService = {
   },
 };
 
-// PhishWatch Backend Service
+// SecureBeacon Backend Service
 export const backendService = {
-  submitHeader: async (headerText: string, token?: string): Promise<SubmitHeaderResponse> => {
+  saveResults: async (
+    inputType: 'url' | 'header' | 'eml',
+    inputContent: string,
+    mlResult: MLPredictResponse,
+    userEmail: string,
+    token: string
+  ): Promise<Analysis> => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
-      const authToken = token ?? (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('phishsafe_token') : null);
-      const response = await fetch(`${BACKEND_URL}/analysis/header`, {
+      if (!token) {
+        throw new Error('Authentication token is required');
+      }
+
+
+      const response = await fetch(`${BACKEND_URL}/api/saveResults`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ header_text: headerText } as SubmitHeaderRequest),
+        body: JSON.stringify({
+          inputType,
+          inputContent,
+          userEmail,
+          mlResult: {
+            is_phishing: mlResult.is_phishing,
+            phishing_probability: mlResult.phishing_probability,
+          },
+        }),
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
-      return handleResponse<SubmitHeaderResponse>(response);
+      return handleResponse<Analysis>(response);
     } catch (error: any) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
@@ -97,46 +112,13 @@ export const backendService = {
     }
   },
 
-  uploadFile: async (file: File, token?: string): Promise<UploadFileResponse> => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s for file uploads
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const authToken = token ?? (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('phishsafe_token') : null);
-
-      const response = await fetch(`${BACKEND_URL}/analysis/file`, {
-        method: 'POST',
-        headers: {
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        },
-        body: formData,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-      return handleResponse<UploadFileResponse>(response);
-    } catch (error: any) {
-      clearTimeout(timeoutId);
-      if (error.name === 'AbortError') {
-        throw new Error('Upload timeout. Please try again.');
-      }
-      if (error.message) {
-        throw error;
-      }
-      throw new Error('Network error. Please check your connection.');
-    }
-  },
-
-  getAnalyses: async (token?: string): Promise<Analysis[]> => {
+  getAnalyses: async (token?: string): Promise<{ items: Analysis[]; nextCursor: string | null }> => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
       const authToken = token ?? (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('phishsafe_token') : null);
-      const response = await fetch(`${BACKEND_URL}/analysis/`, {
+      const response = await fetch(`${BACKEND_URL}/api/analyses`, {
         method: 'GET',
         headers: {
           ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
@@ -145,7 +127,7 @@ export const backendService = {
       });
 
       clearTimeout(timeoutId);
-      return handleResponse<Analysis[]>(response);
+      return handleResponse<{ items: Analysis[]; nextCursor: string | null }>(response);
     } catch (error: any) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
@@ -164,7 +146,7 @@ export const backendService = {
 
     try {
       const authToken = token ?? (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('phishsafe_token') : null);
-      const response = await fetch(`${BACKEND_URL}/analysis/${analysisId}`, {
+      const response = await fetch(`${BACKEND_URL}/api/analyses/${analysisId}`, {
         method: 'GET',
         headers: {
           ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),

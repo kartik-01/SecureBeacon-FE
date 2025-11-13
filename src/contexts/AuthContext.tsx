@@ -17,7 +17,7 @@ interface AuthContextType {
   loginWithRedirect: (options?: LoginOptions) => Promise<void>;
   loginWithPopup: (options?: LoginOptions) => Promise<void>;
   logout: () => void;
-  getAccessTokenSilently: () => Promise<string>;
+  getAccessTokenSilently: (options?: { authorizationParams?: { audience?: string } }) => Promise<string>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -32,8 +32,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loginWithRedirect,
     loginWithPopup,
     logout: auth0Logout,
-    getAccessTokenSilently,
+    getAccessTokenSilently: auth0GetAccessTokenSilently,
   } = auth0;
+
+  // Wrapper to always include audience when getting access token
+  const getAccessTokenSilently = async (options?: { authorizationParams?: { audience?: string } }) => {
+    const audience = import.meta.env.VITE_AUTH0_AUDIENCE;
+    return auth0GetAccessTokenSilently({
+      ...options,
+      authorizationParams: {
+        audience: audience,
+        ...options?.authorizationParams,
+      },
+    });
+  };
 
   const logout = () => {
     // Clear stored token on logout, then redirect via Auth0
@@ -58,14 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[AuthContext] Auth state changed - isAuthenticated:', isAuthenticated, 'isLoading:', isLoading);
       
       if (isAuthenticated) {
-        console.log('[AuthContext] User is authenticated, fetching token...');
-        try {
-            const token = await getAccessTokenSilently({
-            authorizationParams: {
-            audience: import.meta.env.VITE_AUTH0_AUDIENCE,
-            },
-        });
-        console.log(token);
+          try {
+            const token = await getAccessTokenSilently();
           if (!mounted) return;
           console.log('[AuthContext] Token retrieved successfully:', token?.substring(0, 20) + '...');
           try {

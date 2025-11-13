@@ -85,56 +85,56 @@ export function LandingPage({ onStartCheck, onAuth }: LandingPageProps) {
         </motion.div>
 
         {/* CTA Buttons */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5, duration: 0.5 }}
-          className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12"
+          className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center mb-8 sm:mb-12 px-4"
         >
-          <Button 
+          <Button
             onClick={onStartCheck}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-6 text-lg border border-emerald-500 shadow-lg shadow-emerald-500/30"
+            className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 sm:px-8 py-4 sm:py-6 text-base sm:text-lg border border-emerald-500 shadow-lg shadow-emerald-500/30 w-full sm:w-auto"
           >
-            <Shield className="w-5 h-5 mr-2" />
+            <Shield className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
             Start Guest Analysis
           </Button>
-          
-          <Button 
+
+          <Button
             onClick={onAuth}
             variant="outline"
-            className="border-emerald-500 text-emerald-400 hover:bg-emerald-500/10 hover:text-white px-8 py-6 text-lg"
+            className="border-emerald-500 text-emerald-400 hover:bg-emerald-500/10 hover:text-white px-6 sm:px-8 py-4 sm:py-6 text-base sm:text-lg w-full sm:w-auto"
           >
-            <Lock className="w-5 h-5 mr-2" />
+            <Lock className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
             Login / Sign Up
           </Button>
         </motion.div>
 
         {/* Feature Cards */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.7, duration: 0.5 }}
-          className="grid md:grid-cols-3 gap-6 mb-12 max-w-5xl mx-auto"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8 sm:mb-12 max-w-5xl mx-auto px-4"
         >
-          <div className="bg-slate-900/60 border border-emerald-500/30 p-6 rounded-lg hover:border-emerald-500 transition-all hover:shadow-lg hover:shadow-emerald-500/20">
-            <Shield className="w-10 h-10 mb-4 text-emerald-400" />
-            <h3 className="text-xl mb-2 text-slate-50">Link Scanner</h3>
+          <div className="bg-slate-900/60 border border-emerald-500/30 p-4 sm:p-6 rounded-lg hover:border-emerald-500 transition-all hover:shadow-lg hover:shadow-emerald-500/20">
+            <Shield className="w-8 h-8 sm:w-10 sm:h-10 mb-3 sm:mb-4 text-emerald-400" />
+            <h3 className="text-lg sm:text-xl mb-2 text-slate-50">Link Scanner</h3>
             <p className="text-slate-300 font-mono text-sm">
               Analyze suspicious URLs for phishing indicators
             </p>
           </div>
 
-          <div className="bg-slate-900/60 border border-emerald-500/30 p-6 rounded-lg hover:border-emerald-500 transition-all hover:shadow-lg hover:shadow-emerald-500/20">
-            <Mail className="w-10 h-10 mb-4 text-emerald-400" />
-            <h3 className="text-xl mb-2 text-slate-50">Email Analysis</h3>
+          <div className="bg-slate-900/60 border border-emerald-500/30 p-4 sm:p-6 rounded-lg hover:border-emerald-500 transition-all hover:shadow-lg hover:shadow-emerald-500/20">
+            <Mail className="w-8 h-8 sm:w-10 sm:h-10 mb-3 sm:mb-4 text-emerald-400" />
+            <h3 className="text-lg sm:text-xl mb-2 text-slate-50">Email Analysis</h3>
             <p className="text-slate-300 font-mono text-sm">
               Parse .eml files and detect malicious headers
             </p>
           </div>
 
-          <div className="bg-slate-900/60 border border-emerald-500/30 p-6 rounded-lg hover:border-emerald-500 transition-all hover:shadow-lg hover:shadow-emerald-500/20">
-            <Lock className="w-10 h-10 mb-4 text-emerald-400" />
-            <h3 className="text-xl mb-2 text-slate-50">Threat Score</h3>
+          <div className="bg-slate-900/60 border border-emerald-500/30 p-4 sm:p-6 rounded-lg hover:border-emerald-500 transition-all hover:shadow-lg hover:shadow-emerald-500/20 sm:col-span-2 lg:col-span-1">
+            <Lock className="w-8 h-8 sm:w-10 sm:h-10 mb-3 sm:mb-4 text-emerald-400" />
+            <h3 className="text-lg sm:text-xl mb-2 text-slate-50">Threat Score</h3>
             <p className="text-slate-300 font-mono text-sm">
               AI-powered risk assessment in real-time
             </p>

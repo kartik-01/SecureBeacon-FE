@@ -28,8 +28,8 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     setLoading(true);
     try {
       const token = await getAccessTokenSilently();
-      const data = await backendService.getAnalyses(token);
-      setAnalyses(data);
+      const response = await backendService.getAnalyses(token);
+      setAnalyses(response.items);
     } catch (error: any) {
       toast.error(error.message || 'Failed to load history');
     } finally {
@@ -37,18 +37,6 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <Badge className="bg-green-500/20 text-green-400 border-green-500">Completed</Badge>;
-      case 'pending':
-        return <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500">Pending</Badge>;
-      case 'failed':
-        return <Badge className="bg-red-500/20 text-red-400 border-red-500">Failed</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -73,13 +61,13 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
             <div className="space-y-4">
               {analyses.map((analysis) => (
                 <Card
-                  key={analysis._id}
+                  key={analysis.id}
                   className="bg-slate-800/60 border-emerald-500/30 p-4"
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      {analysis.status === 'completed' && analysis.result ? (
-                        analysis.result.is_phishing ? (
+                      {analysis.mlResult ? (
+                        analysis.mlResult.is_phishing ? (
                           <AlertTriangle className="w-5 h-5 text-red-500" />
                         ) : (
                           <CheckCircle className="w-5 h-5 text-green-500" />
@@ -88,31 +76,30 @@ export function HistoryDrawer({ open, onOpenChange }: HistoryDrawerProps) {
                         <Clock className="w-5 h-5 text-yellow-500" />
                       )}
                       <span className="text-sm text-slate-400 font-mono">
-                        {new Date(analysis._id).toLocaleString()}
+                        {new Date(analysis.createdAt).toLocaleString()}
                       </span>
                     </div>
-                    {getStatusBadge(analysis.status)}
+                    <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500">
+                      {analysis.inputType.toUpperCase()}
+                    </Badge>
                   </div>
                   
-                  {analysis.result && (
+                  {analysis.mlResult && (
                     <div className="mt-3 space-y-2">
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-slate-300">Threat:</span>
                         <Badge
                           className={
-                            analysis.result.is_phishing
+                            analysis.mlResult.is_phishing
                               ? 'bg-red-500/20 text-red-400 border-red-500'
                               : 'bg-green-500/20 text-green-400 border-green-500'
                           }
                         >
-                          {analysis.result.is_phishing ? 'Phishing' : 'Safe'}
+                          {analysis.mlResult.is_phishing ? 'Phishing' : 'Safe'}
                         </Badge>
                         <span className="text-sm text-slate-400">
-                          {(analysis.result.confidence * 100).toFixed(1)}% confidence
+                          {(analysis.mlResult.phishing_probability * 100).toFixed(1)}% confidence
                         </span>
-                      </div>
-                      <div className="text-xs text-slate-500 font-mono">
-                        Source: {analysis.result.source}
                       </div>
                     </div>
                   )}

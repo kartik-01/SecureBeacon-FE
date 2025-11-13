@@ -67,6 +67,7 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
     const startTime = Date.now();
 
     try {
+      // Always call ML API first
       const mlResult = await mlService.predictPhishing(url);
       const uiResult = mapToUIResult(mlResult);
 
@@ -78,10 +79,10 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
       setResult(uiResult);
 
       // Auto-save to backend if authenticated
-        if (isAuthenticated) {
+      if (isAuthenticated && user?.email) {
         try {
           const token = await getAccessTokenSilently();
-          await backendService.submitHeader(url, token);
+          await backendService.saveResults('url', url, mlResult, user.email, token);
           // Silently save - no toast notification for auto-save
         } catch (error: any) {
           console.error('Failed to auto-save to backend:', error);
@@ -117,35 +118,10 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
           setAnalyzing(false);
           return;
         }
-        
-        if (isAuthenticated) {
-          // Upload file to backend
-          const token = await getAccessTokenSilently();
-          const backendResult = await backendService.uploadFile(selectedFile, token);
-          
-          if (backendResult.result) {
-            const uiResult = mapToUIResult(backendResult.result);
-            
-            // Ensure minimum 2 second analyzing animation
-            const elapsedTime = Date.now() - startTime;
-            const remainingDelay = Math.max(0, 2000 - elapsedTime);
-            await new Promise(resolve => setTimeout(resolve, remainingDelay));
-
-            setResult(uiResult);
-            toast.success('Analysis complete');
-            setAnalyzing(false);
-            return;
-          } else {
-            // Still pending, use ML API as fallback
-            content = await selectedFile.text();
-          }
-        } else {
-          // Guest mode - read file and use ML API
-          content = await selectedFile.text();
-        }
+        content = await selectedFile.text();
       }
 
-      // Use ML API for analysis
+      // Always call ML API first
       const mlResult = await mlService.predictPhishing(content);
       const uiResult = mapToUIResult(mlResult);
 
@@ -156,14 +132,15 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
 
       setResult(uiResult);
 
-      // Auto-save to backend (if not already saved via file upload)
-      if (isAuthenticated && !selectedFile) {
+      // Auto-save to backend if authenticated
+      if (isAuthenticated && user?.email) {
         try {
           const token = await getAccessTokenSilently();
-          await backendService.submitHeader(content, token);
+          await backendService.saveResults('eml', content, mlResult, user.email, token);
           // Silently save - no toast notification for auto-save
         } catch (error: any) {
           console.error('Failed to auto-save to backend:', error);
+          // Don't show error to user, just log it
         }
       }
 
@@ -230,105 +207,116 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
       
       {/* Header */}
       <div className="border-b border-emerald-500/30 bg-slate-900/80 backdrop-blur relative z-10">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button 
-              onClick={onBack}
-              variant="ghost"
-              className="text-emerald-400 hover:text-slate-50 hover:bg-emerald-500/10"
-            >
-              <ArrowLeft className="w-5 h-5 mr-2" />
-              Back
-            </Button>
-            <div className="flex items-center gap-2">
-              <Shield className="w-6 h-6 text-emerald-400" />
-              <h1 className="text-2xl font-mono text-slate-50">SecureBeacon</h1>
+        <div className="container mx-auto px-4 py-3 sm:py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 sm:gap-4">
+              <Button
+                onClick={onBack}
+                variant="ghost"
+                className="text-emerald-400 hover:text-slate-50 hover:bg-emerald-500/10 p-2 sm:p-3"
+              >
+                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">Back</span>
+              </Button>
+              <div className="flex items-center gap-2">
+                <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400" />
+                <h1 className="text-lg sm:text-xl md:text-2xl font-mono text-slate-50">SecureBeacon</h1>
+              </div>
             </div>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            {!isAuthenticated && (
-              <Badge variant="outline" className="border-emerald-500 text-emerald-400">
-                Guest Mode
-              </Badge>
-            )}
-            {isAuthenticated && (
-              <>
-                <Button
-                  onClick={() => setShowHistory(true)}
-                  variant="outline"
-                  className="border-emerald-500 text-emerald-400 hover:bg-emerald-500/10"
-                >
-                  <History className="w-4 h-4 mr-2" />
-                  History
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 flex items-center gap-2"
-                    >
-                      <User className="w-4 h-4" />
-                      <span className="font-mono text-sm">
-                        {user?.name || user?.email || 'User'}
-                      </span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-64">
-                    <DropdownMenuLabel className="font-mono break-words">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-slate-400 text-xs">Logged in as</span>
-                        <span className="text-slate-200 break-words">{user?.email || 'User Account'}</span>
-                      </div>
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      variant="destructive"
-                      onSelect={(e) => {
-                        e.preventDefault();
-                        logout();
-                      }}
-                      className="cursor-pointer"
-                    >
-                      <LogOut className="w-4 h-4 mr-2" />
-                      Logout
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </>
-            )}
+
+            <div className="flex items-center gap-2 sm:gap-4">
+              {!isAuthenticated && (
+                <Badge variant="outline" className="border-emerald-500 text-emerald-400 text-xs px-2 py-1">
+                  Guest Mode
+                </Badge>
+              )}
+              {isAuthenticated && (
+                <>
+                  <Button
+                    onClick={() => setShowHistory(true)}
+                    variant="outline"
+                    className="border-emerald-500 text-emerald-400 hover:bg-emerald-500/10 hidden sm:flex"
+                  >
+                    <History className="w-4 h-4 mr-2" />
+                    History
+                  </Button>
+                  <Button
+                    onClick={() => setShowHistory(true)}
+                    variant="outline"
+                    className="border-emerald-500 text-emerald-400 hover:bg-emerald-500/10 p-2 sm:hidden"
+                  >
+                    <History className="w-4 h-4" />
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 p-2 sm:p-3"
+                      >
+                        <User className="w-4 h-4" />
+                        <span className="hidden sm:inline font-mono text-sm ml-2">
+                          {user?.name?.split(' ')[0] || user?.email?.split('@')[0] || 'User'}
+                        </span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56 sm:w-64">
+                      <DropdownMenuLabel className="font-mono break-words">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-slate-400 text-xs">Logged in as</span>
+                          <span className="text-slate-200 break-words text-sm">{user?.email || 'User Account'}</span>
+                        </div>
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onSelect={(e) => {
+                          e.preventDefault();
+                          logout();
+                        }}
+                        className="cursor-pointer"
+                      >
+                        <LogOut className="w-4 h-4 mr-2" />
+                        Logout
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-4 sm:py-8">
         <Tabs defaultValue="url" className="max-w-4xl mx-auto">
-          <TabsList className="grid w-full grid-cols-2 bg-slate-900/60 border border-emerald-500/30">
-            <TabsTrigger value="url" className="data-[state=active]:bg-emerald-600/20 data-[state=active]:text-slate-50 text-slate-300">
-              <LinkIcon className="w-4 h-4 mr-2" />
-              URL Scanner
+          <TabsList className="grid w-full grid-cols-2 bg-slate-900/60 border border-emerald-500/30 h-auto">
+            <TabsTrigger value="url" className="data-[state=active]:bg-emerald-600/20 data-[state=active]:text-slate-50 text-slate-300 py-3 text-sm sm:text-base">
+              <LinkIcon className="w-4 h-4 mr-1 sm:mr-2" />
+              <span className="hidden xs:inline">URL Scanner</span>
+              <span className="xs:hidden">URL</span>
             </TabsTrigger>
-            <TabsTrigger value="email" className="data-[state=active]:bg-emerald-600/20 data-[state=active]:text-slate-50 text-slate-300">
-              <Mail className="w-4 h-4 mr-2" />
-              Email Analysis
+            <TabsTrigger value="email" className="data-[state=active]:bg-emerald-600/20 data-[state=active]:text-slate-50 text-slate-300 py-3 text-sm sm:text-base">
+              <Mail className="w-4 h-4 mr-1 sm:mr-2" />
+              <span className="hidden xs:inline">Email Analysis</span>
+              <span className="xs:hidden">Email</span>
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="url" className="mt-6">
-            <Card className="bg-slate-900/60 border-emerald-500/30 p-6">
-              <h2 className="text-xl mb-4 text-slate-50">Scan Suspicious Link</h2>
+          <TabsContent value="url" className="mt-4 sm:mt-6">
+            <Card className="bg-slate-900/60 border-emerald-500/30 p-4 sm:p-6">
+              <h2 className="text-lg sm:text-xl mb-4 text-slate-50">Scan Suspicious Link</h2>
               <div className="space-y-4">
-                <Input 
+                <Input
                   placeholder="https://suspicious-website.com/login"
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
-                  className="bg-slate-900/50 border-emerald-500/30 text-slate-100 font-mono placeholder:text-slate-500 focus:border-emerald-500"
+                  className="bg-slate-900/50 border-emerald-500/30 text-slate-100 font-mono placeholder:text-slate-500 focus:border-emerald-500 text-sm sm:text-base"
                 />
-                <Button 
+                <Button
                   onClick={analyzeUrl}
                   disabled={!url || analyzing}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 shadow-lg shadow-emerald-500/30"
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 shadow-lg shadow-emerald-500/30 py-3 text-sm sm:text-base"
                 >
                   {analyzing ? 'Analyzing...' : 'Scan URL'}
                 </Button>
@@ -336,45 +324,45 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
             </Card>
           </TabsContent>
 
-          <TabsContent value="email" className="mt-6">
-            <Card className="bg-slate-900/60 border-emerald-500/30 p-6">
-              <h2 className="text-xl mb-4 text-slate-50">Analyze Email Content</h2>
+          <TabsContent value="email" className="mt-4 sm:mt-6">
+            <Card className="bg-slate-900/60 border-emerald-500/30 p-4 sm:p-6">
+              <h2 className="text-lg sm:text-xl mb-4 text-slate-50">Analyze Email Content</h2>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm text-slate-300 mb-2">
                     Upload .eml file (optional)
                   </label>
-                  <div className="flex items-center gap-2">
-                    <Input 
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                    <Input
                       type="file"
                       accept=".eml"
                       onChange={handleFileChange}
-                      className="bg-slate-900/50 border-emerald-500/30 text-slate-100 font-mono"
+                      className="bg-slate-900/50 border-emerald-500/30 text-slate-100 font-mono text-sm"
                     />
                     {selectedFile && (
-                      <span className="text-sm text-emerald-400">{selectedFile.name}</span>
+                      <span className="text-sm text-emerald-400 truncate max-w-48">{selectedFile.name}</span>
                     )}
                   </div>
                 </div>
                 <div className="text-center text-slate-400 text-sm">OR</div>
                 <div>
-                  <Textarea 
+                  <Textarea
                     placeholder="Paste full raw email with headers (Delivered-To, Received, From, To, Subject, etc.) and body content..."
                     value={emailContent}
                     onChange={(e) => {
                       setEmailContent(e.target.value);
                       setSelectedFile(null); // Clear file when text is entered
                     }}
-                    className="bg-slate-900/50 border-emerald-500/30 text-slate-100 font-mono min-h-[200px] placeholder:text-slate-500 focus:border-emerald-500"
+                    className="bg-slate-900/50 border-emerald-500/30 text-slate-100 font-mono min-h-[150px] sm:min-h-[200px] placeholder:text-slate-500 focus:border-emerald-500 text-sm"
                   />
                   <p className="text-xs text-slate-400 mt-2 font-mono">
                     Paste the complete email including all headers and body content
                   </p>
                 </div>
-                <Button 
+                <Button
                   onClick={analyzeEmail}
                   disabled={(!emailContent && !selectedFile) || analyzing}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 shadow-lg shadow-emerald-500/30"
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 shadow-lg shadow-emerald-500/30 py-3 text-sm sm:text-base"
                 >
                   {analyzing ? 'Analyzing...' : 'Analyze Email'}
                 </Button>
@@ -409,48 +397,50 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="max-w-4xl mx-auto mt-8"
+            className="max-w-4xl mx-auto mt-4 sm:mt-8"
           >
-            <Card className={`border-2 p-8 ${
-              result.isPhishing 
-                ? 'bg-red-950/20 border-red-500' 
+            <Card className={`border-2 p-4 sm:p-6 md:p-8 ${
+              result.isPhishing
+                ? 'bg-red-950/20 border-red-500'
                 : 'bg-green-950/20 border-green-500'
             }`}>
-              <div className="flex items-start gap-4 mb-6">
-                {result.isPhishing ? (
-                  <XCircle className="w-16 h-16 text-red-500 flex-shrink-0" />
-                ) : (
-                  <CheckCircle className="w-16 h-16 text-green-500 flex-shrink-0" />
-                )}
-                
-                <div className="flex-1">
-                  <h2 className={`text-3xl mb-2 ${result.isPhishing ? 'text-red-400' : 'text-emerald-400'}`}>
-                    {result.isPhishing ? 'THREAT DETECTED' : 'APPEARS SAFE'}
-                  </h2>
-                  <p className="text-lg text-slate-200">
-                    Confidence: {result.confidence.toFixed(1)}%
-                  </p>
+              <div className="flex flex-col sm:flex-row items-start gap-4 mb-4 sm:mb-6">
+                <div className="flex items-center gap-4 w-full sm:w-auto">
+                  {result.isPhishing ? (
+                    <XCircle className="w-12 h-12 sm:w-16 sm:h-16 text-red-500 flex-shrink-0" />
+                  ) : (
+                    <CheckCircle className="w-12 h-12 sm:w-16 sm:h-16 text-green-500 flex-shrink-0" />
+                  )}
+
+                  <div className="flex-1 min-w-0">
+                    <h2 className={`text-xl sm:text-2xl md:text-3xl mb-2 ${result.isPhishing ? 'text-red-400' : 'text-emerald-400'}`}>
+                      {result.isPhishing ? 'THREAT DETECTED' : 'APPEARS SAFE'}
+                    </h2>
+                    <p className="text-sm sm:text-base md:text-lg text-slate-200">
+                      Confidence: {result.confidence.toFixed(1)}%
+                    </p>
+                  </div>
                 </div>
 
-                <Badge className={`${getThreatColor(result.threatLevel)} border-current text-lg px-4 py-2`}>
-                  <AlertTriangle className="w-4 h-4 mr-2" />
+                <Badge className={`${getThreatColor(result.threatLevel)} border-current text-sm sm:text-base md:text-lg px-3 sm:px-4 py-1 sm:py-2 self-start sm:self-center`}>
+                  <AlertTriangle className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
                   {result.threatLevel.toUpperCase()}
                 </Badge>
               </div>
 
-                <Progress value={result.confidence} className="mb-3 h-3" />
+                <Progress value={result.confidence} className="mb-3 h-2 sm:h-3" />
 
-              <div className={`p-4 rounded-lg border ${
+              <div className={`p-3 sm:p-4 rounded-lg border ${
                  result.isPhishing
                   ? 'border-red-500/50 bg-red-950/30'
                   : 'border-green-500/50 bg-green-950/30'
               }`}>
-                <h3 className={`text-lg font-mono mb-3 ${
+                <h3 className={`text-base sm:text-lg font-mono mb-2 sm:mb-3 ${
                   result.isPhishing ? 'text-red-300' : 'text-green-300'
                 }`}>
                   {getResultMessage(result.isPhishing, result.threatLevel).title}
                 </h3>
-                <p className="text-slate-100 leading-relaxed font-mono text-sm">
+                <p className="text-slate-100 leading-relaxed font-mono text-xs sm:text-sm">
                   {getResultMessage(result.isPhishing, result.threatLevel).message}
                 </p>
               </div>

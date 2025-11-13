@@ -24,12 +24,18 @@ export interface AnalysisResult {
 }
 
 export interface Analysis {
-  _id: string;
-  user_sub: string;
-  header_enc: HeaderEncryption | null;
-  eml_file_id: string | null;
-  status: 'pending' | 'completed' | 'failed';
-  result: AnalysisResult | null;
+  id: string;
+  userSub: string;
+  userEmail: string;
+  inputType: 'url' | 'header' | 'eml';
+  inputContent: string;
+  analysisContext?: Record<string, unknown> | null;
+  mlResult: {
+    is_phishing: boolean;
+    phishing_probability: number;
+  };
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface SubmitHeaderRequest {
