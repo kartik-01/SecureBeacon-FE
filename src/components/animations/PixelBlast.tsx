@@ -85,12 +85,23 @@ const createTouchTexture = () => {
     if (last) {
       const dx = norm.x - last.x;
       const dy = norm.y - last.y;
-      if (dx === 0 && dy === 0) return;
       const dd = dx * dx + dy * dy;
       const d = Math.sqrt(dd);
-      vx = dx / (d || 1);
-      vy = dy / (d || 1);
-      force = Math.min(dd * 10000, 1);
+      // Always create an effect, even with minimal movement
+      if (d < 0.001) {
+        // Very small or no movement - use default hover force
+        force = 0.4; // Default hover force
+        vx = 0;
+        vy = 0;
+      } else {
+        // Normal movement
+        vx = dx / (d || 1);
+        vy = dy / (d || 1);
+        force = Math.min(Math.max(dd * 10000, 0.2), 1); // Ensure minimum force of 0.2
+      }
+    } else {
+      // First touch, use default force
+      force = 0.4;
     }
     last = { x: norm.x, y: norm.y };
     trail.push({ x: norm.x, y: norm.y, age: 0, force, vx, vy });
@@ -423,7 +434,11 @@ const PixelBlast: React.FC<PixelBlastProps> = ({
       });
       renderer.domElement.style.width = '100%';
       renderer.domElement.style.height = '100%';
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.domElement.style.pointerEvents = 'auto';
+      // Limit pixel ratio on mobile for better performance and visibility
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      const maxPixelRatio = isMobile ? 1.5 : 2;
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxPixelRatio));
       container.appendChild(renderer.domElement);
       if (transparent) renderer.setClearAlpha(0);
       else renderer.setClearColor(0x000000, 1);
@@ -543,12 +558,32 @@ const PixelBlast: React.FC<PixelBlastProps> = ({
       const onPointerMove = (e: PointerEvent) => {
         if (!touch) return;
         const { fx, fy, w, h } = mapToPixels(e);
+        // Always add touch on move to ensure hover effects work in all directions
+        touch.addTouch({ x: fx / w, y: fy / h });
+      };
+      const onPointerEnter = (e: PointerEvent) => {
+        if (!touch) return;
+        const { fx, fy, w, h } = mapToPixels(e);
+        // Trigger effect when entering the canvas area
+        touch.addTouch({ x: fx / w, y: fy / h });
+      };
+      const onMouseMove = (e: MouseEvent) => {
+        if (!touch) return;
+        const { fx, fy, w, h } = mapToPixels(e as any);
+        // Fallback for mouse events
         touch.addTouch({ x: fx / w, y: fy / h });
       };
       renderer.domElement.addEventListener('pointerdown', onPointerDown, {
         passive: true
       });
       renderer.domElement.addEventListener('pointermove', onPointerMove, {
+        passive: true
+      });
+      renderer.domElement.addEventListener('pointerenter', onPointerEnter, {
+        passive: true
+      });
+      // Also listen to mousemove as fallback
+      renderer.domElement.addEventListener('mousemove', onMouseMove, {
         passive: true
       });
       let raf = 0;

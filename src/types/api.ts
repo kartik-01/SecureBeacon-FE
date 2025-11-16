@@ -3,6 +3,7 @@ export interface MLPredictRequest {
   raw_email: string;
 }
 
+// For email analysis (legacy format)
 export interface MLPredictResponse {
   is_phishing: boolean;
   phishing_probability: number; // 0.0-1.0 probability from ML model
@@ -11,7 +12,8 @@ export interface MLPredictResponse {
   details?: Record<string, any>;
 }
 
-// PhishWatch Backend API Types
+
+// SecureBeacon Backend API Types
 export interface HeaderEncryption {
   nonce_b64: string;
   ciphertext_b64: string;
@@ -27,7 +29,7 @@ export interface Analysis {
   id: string;
   userSub: string;
   userEmail: string;
-  inputType: 'url' | 'header' | 'eml';
+  inputType: 'header' | 'eml';
   inputContent: string;
   analysisContext?: Record<string, unknown> | null;
   mlResult: {
@@ -43,7 +45,7 @@ export interface EncryptedAnalysis {
   id: string;
   userSub: string;
   userEmail: string; // Encrypted JSON string
-  inputType: 'url' | 'header' | 'eml';
+  inputType: 'header' | 'eml';
   inputContent: string; // Encrypted JSON string
   analysisContext?: string | null; // Encrypted JSON string
   mlResult: string; // Encrypted JSON string

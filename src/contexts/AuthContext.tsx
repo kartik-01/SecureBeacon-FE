@@ -62,12 +62,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  // When the user becomes authenticated, fetch an access token and store it in sessionStorage.
-  // This allows other parts of the app (or non-React scripts) to read the token if needed.
+  // Store token in sessionStorage when authenticated
   useEffect(() => {
-    let mounted = true;
-    return () => { mounted = false };
-  }, [isAuthenticated, getAccessTokenSilently]);
+    if (isAuthenticated && user) {
+      getAccessTokenSilently()
+        .then((token) => {
+          try {
+            sessionStorage.setItem('phishsafe_token', token);
+          } catch (e) {
+            // Ignore storage errors
+          }
+        })
+        .catch(() => {
+          // Ignore token retrieval errors
+        });
+    }
+  }, [isAuthenticated, user, getAccessTokenSilently]);
 
   return (
     <AuthContext.Provider

@@ -70,7 +70,7 @@ export function EncryptionSetup({ open, onComplete }: EncryptionSetupProps) {
         onComplete();
       }, 100);
     } catch (error: any) {
-      console.error('Failed to setup encryption:', error);
+      // Failed to setup encryption
       toast.error(error.message || 'Failed to setup encryption');
       setErrors([error.message || 'Failed to setup encryption']);
     }

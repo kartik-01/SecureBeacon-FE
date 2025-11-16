@@ -43,7 +43,7 @@ interface EncryptionContextType {
 const EncryptionContext = createContext<EncryptionContextType | undefined>(undefined);
 
 export function EncryptionProvider({ children }: { children: ReactNode }) {
-  const { user, isAuthenticated, getAccessTokenSilently } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading, getAccessTokenSilently } = useAuth();
   const [isSetup, setIsSetup] = useState(false);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -256,6 +256,11 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
   // Check if encryption is setup for current user
   useEffect(() => {
     const checkSetup = async () => {
+      // Wait for auth check to complete before checking encryption status
+      if (authLoading) {
+        return;
+      }
+      
       if (!isAuthenticated || !userSub) {
         setIsSetup(false);
         setIsUnlocked(false);
@@ -332,14 +337,15 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     };
 
     checkSetup();
-  }, [isAuthenticated, userSub, getAccessTokenSilently, getEncryptionStatus, encryptionKey, isUnlocked, isSetup]);
+  }, [isAuthenticated, authLoading, userSub, getAccessTokenSilently, getEncryptionStatus, encryptionKey, isUnlocked, isSetup]);
 
-  // Lock encryption on logout
+  // Lock encryption on logout (but not while Auth0 is still checking)
   useEffect(() => {
-    if (!isAuthenticated) {
+    // Only lock if auth check is complete and user is not authenticated
+    if (!authLoading && !isAuthenticated) {
       lockEncryption();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, authLoading]);
 
   const getSalt = useCallback(async (): Promise<string | null> => {
     if (userSalt) return userSalt;

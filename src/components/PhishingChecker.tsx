@@ -1,21 +1,11 @@
 import { useState, useEffect, useRef, useLayoutEffect } from 'react';
-import { Shield, Link as LinkIcon, Mail, ArrowLeft, AlertTriangle, CheckCircle, XCircle, History, User, LogOut, X, Info } from 'lucide-react';
+import { CheckCircle, XCircle, X, Info } from 'lucide-react';
 import { Button } from './ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Card } from './ui/card';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
-import { Progress } from './ui/progress';
-import { Badge } from './ui/badge';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from './ui/dropdown-menu';
 import LetterGlitch from './animations/LetterGlitch';
+import PixelBlast from './animations/PixelBlast';
 import { motion } from 'motion/react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEncryption } from '@/contexts/EncryptionContext';
@@ -23,15 +13,16 @@ import { mlService, backendService } from '@/services/api';
 import { toast } from 'sonner';
 import type { AnalysisResultUI } from '@/types/api';
 import { HistoryDrawer } from './HistoryDrawer';
+import { Navbar } from './Navbar';
 
 interface PhishingCheckerProps {
   onBack: () => void;
+  onAuth?: () => void;
 }
 
-export function PhishingChecker({ onBack }: PhishingCheckerProps) {
-  const { isAuthenticated, getAccessTokenSilently, user, logout } = useAuth();
+export function PhishingChecker({ onBack, onAuth }: PhishingCheckerProps) {
+  const { isAuthenticated, getAccessTokenSilently, user } = useAuth();
   const { encryptData, isUnlocked, isSetup } = useEncryption();
-  const [url, setUrl] = useState('');
   const [emailContent, setEmailContent] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -40,6 +31,8 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
   const historyButtonRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showReloadNotice, setShowReloadNotice] = useState(false);
+  const resultRef = useRef<HTMLDivElement>(null);
+  const analyzingRef = useRef<HTMLDivElement>(null);
 
   // Blur file input and other focusable elements when encryption unlock dialog is about to open
   // This prevents aria-hidden warning when dialog applies aria-hidden to background
@@ -61,27 +54,40 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
     }
   }, [isSetup, isUnlocked]);
 
-  // Show reload notice when encryption is unlocked (if not dismissed)
+  // Show reload notice when user first lands on the analysis screen
+  // Show it when encryption is set up (whether unlocked or not) - user needs to know about reload behavior
+  // Also show it for guest mode users to encourage login
   useEffect(() => {
-    if (isUnlocked) {
+    if (isSetup) {
       // Check if notice was dismissed in this session
       const dismissed = sessionStorage.getItem('reload_notice_dismissed');
+      if (!dismissed) {
+        setShowReloadNotice(true);
+      }
+    } else if (!isAuthenticated) {
+      // Show notice for guest mode users
+      const dismissed = sessionStorage.getItem('guest_notice_dismissed');
       if (!dismissed) {
         setShowReloadNotice(true);
       }
     } else {
       setShowReloadNotice(false);
     }
-  }, [isUnlocked]);
+  }, [isSetup, isAuthenticated]);
 
   const handleDismissNotice = () => {
     setShowReloadNotice(false);
-    sessionStorage.setItem('reload_notice_dismissed', 'true');
+    if (isAuthenticated && isSetup) {
+      sessionStorage.setItem('reload_notice_dismissed', 'true');
+    } else {
+      sessionStorage.setItem('guest_notice_dismissed', 'true');
+    }
   };
 
   // Convert API response to UI format
   const mapToUIResult = (apiResult: any): AnalysisResultUI => {
-    // Use phishing_probability from API (0.0-1.0)
+    // Email analysis format
+    const isPhishing = apiResult.is_phishing || false;
     const confidence = (apiResult.phishing_probability ?? 0) * 100;
     
     let threatLevel: 'low' | 'medium' | 'high' | 'critical';
@@ -91,7 +97,7 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
     else threatLevel = 'low';
 
     return {
-      isPhishing: apiResult.is_phishing || false,
+      isPhishing,
       confidence,
       threatLevel,
       indicators: [],
@@ -99,56 +105,68 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
     };
   };
 
-  const analyzeUrl = async () => {
-    if (!url.trim()) {
-      toast.error('Please enter a URL');
-      return;
-    }
-
-    setAnalyzing(true);
-    setResult(null);
-    const startTime = Date.now();
-
-    try {
-      // Always call ML API first
-      const mlResult = await mlService.predictPhishing(url);
-      const uiResult = mapToUIResult(mlResult);
-
-      // Ensure minimum 2 second analyzing animation
-      const elapsedTime = Date.now() - startTime;
-      const remainingDelay = Math.max(0, 2000 - elapsedTime);
-      await new Promise(resolve => setTimeout(resolve, remainingDelay));
-
-      setResult(uiResult);
-
-      // Auto-save to backend if authenticated and encryption unlocked
-      if (isAuthenticated && user?.email && isUnlocked) {
-        try {
-          const token = await getAccessTokenSilently();
-          // Encrypt data before sending
-          const encryptedData = await encryptData({
-            userEmail: user.email,
-            inputContent: url,
-            mlResult: {
-              is_phishing: mlResult.is_phishing,
-              phishing_probability: mlResult.phishing_probability,
-            },
+  // Auto-scroll to analyzing section when analysis starts
+  useEffect(() => {
+    if (analyzing) {
+      const scrollToAnalyzing = () => {
+        if (analyzingRef.current) {
+          const navbarHeight = 80;
+          const element = analyzingRef.current;
+          const elementTop = element.getBoundingClientRect().top + window.scrollY;
+          const offsetPosition = elementTop - navbarHeight - 20;
+          
+          window.scrollTo({
+            top: Math.max(0, offsetPosition),
+            behavior: 'smooth'
           });
-          await backendService.saveResults('url', encryptedData.inputContent!, encryptedData.mlResult!, encryptedData.userEmail!, token);
-          // Silently save - no toast notification for auto-save
-        } catch (error: any) {
-          console.error('Failed to auto-save to backend:', error);
-          // Don't show error to user, just log it
         }
-      }
-
-      toast.success('Analysis complete');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to analyze URL');
-    } finally {
-      setAnalyzing(false);
+      };
+      
+      // Try scrolling after delays to ensure element is rendered
+      const timeoutId1 = setTimeout(scrollToAnalyzing, 100);
+      const timeoutId2 = setTimeout(scrollToAnalyzing, 300);
+      const timeoutId3 = setTimeout(scrollToAnalyzing, 500);
+      
+      return () => {
+        clearTimeout(timeoutId1);
+        clearTimeout(timeoutId2);
+        clearTimeout(timeoutId3);
+      };
     }
-  };
+  }, [analyzing]);
+
+  // Auto-scroll to result when analysis completes
+  useEffect(() => {
+    if (result && !analyzing) {
+      // Wait for DOM to be ready and element to be rendered
+      const scrollToResult = () => {
+        if (resultRef.current) {
+          const navbarHeight = 80;
+          const element = resultRef.current;
+          
+          // Calculate position with offset
+          const elementTop = element.getBoundingClientRect().top + window.scrollY;
+          const offsetPosition = elementTop - navbarHeight - 20;
+          
+          window.scrollTo({
+            top: Math.max(0, offsetPosition),
+            behavior: 'smooth'
+          });
+        }
+      };
+      
+      // Try scrolling after a delay to ensure element is rendered
+      const timeoutId1 = setTimeout(scrollToResult, 100);
+      const timeoutId2 = setTimeout(scrollToResult, 500);
+      const timeoutId3 = setTimeout(scrollToResult, 1000);
+      
+      return () => {
+        clearTimeout(timeoutId1);
+        clearTimeout(timeoutId2);
+        clearTimeout(timeoutId3);
+      };
+    }
+  }, [result, analyzing]);
 
   const analyzeEmail = async () => {
     if (!emailContent.trim() && !selectedFile) {
@@ -159,6 +177,21 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
     setAnalyzing(true);
     setResult(null);
     const startTime = Date.now();
+    
+    // Scroll to analyzing section immediately
+    setTimeout(() => {
+      if (analyzingRef.current) {
+        const navbarHeight = 80;
+        const element = analyzingRef.current;
+        const elementTop = element.getBoundingClientRect().top + window.scrollY;
+        const offsetPosition = elementTop - navbarHeight - 20;
+        
+        window.scrollTo({
+          top: Math.max(0, offsetPosition),
+          behavior: 'smooth'
+        });
+      }
+    }, 100);
 
     try {
       let content = emailContent;
@@ -183,6 +216,21 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
       await new Promise(resolve => setTimeout(resolve, remainingDelay));
 
       setResult(uiResult);
+      
+      // Trigger scroll after React renders the component
+      setTimeout(() => {
+        if (resultRef.current) {
+          const navbarHeight = 80;
+          const element = resultRef.current;
+          const elementTop = element.getBoundingClientRect().top + window.scrollY;
+          const offsetPosition = elementTop - navbarHeight - 20;
+          
+          window.scrollTo({
+            top: Math.max(0, offsetPosition),
+            behavior: 'smooth'
+          });
+        }
+      }, 800);
 
       // Auto-save to backend if authenticated and encryption unlocked
       if (isAuthenticated && user?.email && isUnlocked) {
@@ -200,7 +248,7 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
           await backendService.saveResults('eml', encryptedData.inputContent!, encryptedData.mlResult!, encryptedData.userEmail!, token);
           // Silently save - no toast notification for auto-save
         } catch (error: any) {
-          console.error('Failed to auto-save to backend:', error);
+          // Failed to auto-save to backend
           // Don't show error to user, just log it
         }
       }
@@ -226,16 +274,6 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
     if (isSetup && !isUnlocked) {
       // If encryption unlock dialog is open, blur immediately
       e.target.blur();
-    }
-  };
-
-  const getThreatColor = (level: string) => {
-    switch (level) {
-      case 'critical': return 'text-red-500';
-      case 'high': return 'text-orange-500';
-      case 'medium': return 'text-yellow-500';
-      case 'low': return 'text-green-500';
-      default: return 'text-gray-500';
     }
   };
 
@@ -272,106 +310,67 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
   };
 
   return (
-    <div className="min-h-screen bg-black text-emerald-400" data-phishing-checker>
-      
-      {/* Header */}
-      <div className="border-b border-emerald-500/30 bg-slate-900/80 backdrop-blur relative z-10">
-        <div className="container mx-auto px-4 py-3 sm:py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 sm:gap-4">
-              <Button
-                onClick={onBack}
-                variant="ghost"
-                className="text-emerald-400 hover:text-slate-50 hover:bg-emerald-500/10 p-2 sm:p-3"
-              >
-                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" />
-                <span className="hidden sm:inline">Back</span>
-              </Button>
-              <div className="flex items-center gap-2">
-                <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400" />
-                <h1 className="text-lg sm:text-xl md:text-2xl font-mono text-slate-50">SecureBeacon</h1>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 sm:gap-4">
-              {!isAuthenticated && (
-                <Badge variant="outline" className="border-emerald-500 text-emerald-400 text-xs px-2 py-1">
-                  Guest Mode
-                </Badge>
-              )}
-              {isAuthenticated && (
-                <>
-                  <Button
-                    ref={historyButtonRef}
-                    onClick={() => {
-                      (document.activeElement as HTMLElement | null)?.blur?.();
-                      setShowHistory(true);
-                    }}
-                    variant="outline"
-                    className="border-emerald-500 text-emerald-400 hover:bg-emerald-500/10 hidden sm:flex"
-                  >
-                    <History className="w-4 h-4 mr-2" />
-                    History
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      (document.activeElement as HTMLElement | null)?.blur?.();
-                      setShowHistory(true);
-                    }}
-                    variant="outline"
-                    className="border-emerald-500 text-emerald-400 hover:bg-emerald-500/10 p-2 sm:hidden"
-                  >
-                    <History className="w-4 h-4" />
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 p-2 sm:p-3"
-                      >
-                        <User className="w-4 h-4" />
-                        <span className="hidden sm:inline font-mono text-sm ml-2">
-                          {user?.name?.split(' ')[0] || user?.email?.split('@')[0] || 'User'}
-                        </span>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56 sm:w-64">
-                      <DropdownMenuLabel className="font-mono break-words">
-                        <div className="flex flex-col gap-1">
-                          <span className="text-slate-400 text-xs">Logged in as</span>
-                          <span className="text-slate-200 break-words text-sm">{user?.email || 'User Account'}</span>
-                        </div>
-                      </DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onSelect={(e) => {
-                          e.preventDefault();
-                          logout();
-                        }}
-                        className="cursor-pointer"
-                      >
-                        <LogOut className="w-4 h-4 mr-2" />
-                        Logout
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
+    <div className="min-h-screen bg-black text-emerald-400 relative" data-phishing-checker>
+      {/* Pixel Blast Background */}
+      <div className="fixed inset-0 opacity-50" style={{ width: '100%', height: '100%', zIndex: 0, minHeight: '100vh', minWidth: '100vw' }}>
+        <PixelBlast 
+          variant="circle"
+          pixelSize={7}
+          color="#10b981"
+          patternScale={3}
+          patternDensity={1.0}
+          pixelSizeJitter={0.5}
+          enableRipples
+          rippleSpeed={0.4}
+          rippleThickness={0.12}
+          rippleIntensityScale={1.5}
+          liquid
+          liquidStrength={0.12}
+          liquidRadius={1.2}
+          liquidWobbleSpeed={5}
+          speed={0.6}
+          edgeFade={0.25}
+          transparent
+        />
       </div>
 
-      {/* Reload Notice */}
+      {/* Navbar */}
+      <Navbar 
+        showBackButton 
+        onBack={onBack}
+        showGuestMode={!isAuthenticated}
+        showHistory={isAuthenticated}
+        onAuth={onAuth}
+        onHistoryClick={() => {
+          (document.activeElement as HTMLElement | null)?.blur?.();
+          setShowHistory(true);
+        }}
+        historyButtonRef={historyButtonRef}
+      />
+
+      {/* Reload Notice / Guest Mode Notice */}
       {showReloadNotice && (
-        <div className="w-full flex justify-center pt-4 pb-2 px-4">
-          <div className="max-w-2xl w-full bg-slate-900/90 border border-emerald-500/30 rounded-lg p-3 sm:p-4 flex items-center gap-3 shadow-lg shadow-emerald-500/10">
+        <div className="w-full flex justify-center pt-8 pb-2 px-4 relative z-10">
+          <div 
+            className="max-w-2xl w-full rounded-lg p-3 sm:p-4 flex items-center gap-3"
+            style={{
+              backgroundColor: 'rgba(10, 13, 10, 0.5)',
+              backdropFilter: 'blur(4px)',
+              WebkitBackdropFilter: 'blur(4px)',
+              boxShadow: '0 2px 20px rgba(16, 185, 129, 0.15)',
+              border: '1px solid #093d0f',
+            }}
+          >
             <Info className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-            <p className="text-sm sm:text-base text-slate-200 flex-1 font-mono">
-              <span className="text-emerald-400">Note:</span> If you reload the page, you'll need to enter your passphrase again for security.
-            </p>
+            {isAuthenticated && isSetup ? (
+              <p className="text-sm sm:text-base text-slate-200 flex-1 font-mono">
+                <span className="text-emerald-400">Note:</span> If you reload the page, you'll need to enter your passphrase again for security.
+              </p>
+            ) : (
+              <p className="text-sm sm:text-base text-slate-200 flex-1 font-mono">
+                <span className="text-emerald-400">Save your analysis history</span> securely with end-to-end encryption. <span className="text-emerald-400 font-semibold">Login or Sign Up</span> to get started.
+              </p>
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -385,45 +384,19 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
         </div>
       )}
 
-      <div className="container mx-auto px-4 py-4 sm:py-8">
-        <Tabs defaultValue="url" className="max-w-4xl mx-auto">
-          <TabsList className="grid w-full grid-cols-2 bg-slate-900/60 border border-emerald-500/30 h-auto">
-            <TabsTrigger value="url" className="data-[state=active]:bg-emerald-600/20 data-[state=active]:text-slate-50 text-slate-300 py-3 text-sm sm:text-base">
-              <LinkIcon className="w-4 h-4 mr-1 sm:mr-2" />
-              <span className="hidden xs:inline">URL Scanner</span>
-              <span className="xs:hidden">URL</span>
-            </TabsTrigger>
-            <TabsTrigger value="email" className="data-[state=active]:bg-emerald-600/20 data-[state=active]:text-slate-50 text-slate-300 py-3 text-sm sm:text-base">
-              <Mail className="w-4 h-4 mr-1 sm:mr-2" />
-              <span className="hidden xs:inline">Email Analysis</span>
-              <span className="xs:hidden">Email</span>
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="url" className="mt-4 sm:mt-6">
-            <Card className="bg-slate-900/60 border-emerald-500/30 p-4 sm:p-6">
-              <h2 className="text-lg sm:text-xl mb-4 text-slate-50">Scan Suspicious Link</h2>
-              <div className="space-y-4">
-                <Input
-                  placeholder="https://suspicious-website.com/login"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  className="bg-slate-900/50 border-emerald-500/30 text-slate-100 font-mono placeholder:text-slate-500 focus:border-emerald-500 text-sm sm:text-base"
-                />
-                <Button
-                  onClick={analyzeUrl}
-                  disabled={!url || analyzing}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 shadow-lg shadow-emerald-500/30 py-3 text-sm sm:text-base"
-                >
-                  {analyzing ? 'Analyzing...' : 'Scan URL'}
-                </Button>
-              </div>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="email" className="mt-4 sm:mt-6">
-            <Card className="bg-slate-900/60 border-emerald-500/30 p-4 sm:p-6">
-              <h2 className="text-lg sm:text-xl mb-4 text-slate-50">Analyze Email Content</h2>
+      <div className="container mx-auto px-4 py-4 sm:py-8 relative z-10">
+        <div className="max-w-4xl mx-auto">
+          <Card 
+            className="p-4 sm:p-6"
+            style={{
+              backgroundColor: 'rgba(10, 13, 10, 0.5)',
+              backdropFilter: 'blur(2px)',
+              WebkitBackdropFilter: 'blur(2px)',
+              boxShadow: '0 2px 20px rgba(16, 185, 129, 0.15)',
+              border: '1px solid #093d0f',
+            }}
+          >
+            <h2 className="text-lg sm:text-xl mb-4 text-slate-50">Analyze Email Content</h2>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm text-slate-300 mb-2">
@@ -436,7 +409,11 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
                       accept=".eml"
                       onChange={handleFileChange}
                       onFocus={handleFileInputFocus}
-                      className="bg-slate-900/50 border-emerald-500/30 text-slate-100 font-mono text-sm"
+                      className="text-slate-100 font-mono text-sm border-0 bg-transparent p-0 [&::file-selector-button]:text-white [&::file-selector-button]:bg-[#08170a] [&::file-selector-button]:rounded-full [&::file-selector-button]:px-4 [&::file-selector-button]:py-1.5 [&::file-selector-button]:border-0 [&::file-selector-button]:cursor-pointer [&::file-selector-button]:hover:bg-[#0a1f0d] [&::file-selector-button]:transition-colors [&::file-selector-button]:mr-3 [&::file-selector-button]:h-auto [&::file-selector-button]:leading-normal"
+                      style={{
+                        boxShadow: 'none',
+                        lineHeight: '1.5rem',
+                      }}
                     />
                     {selectedFile && (
                       <span className="text-sm text-emerald-400 truncate max-w-48">{selectedFile.name}</span>
@@ -452,7 +429,14 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
                       setEmailContent(e.target.value);
                       setSelectedFile(null); // Clear file when text is entered
                     }}
-                    className="bg-slate-900/50 border-emerald-500/30 text-slate-100 font-mono min-h-[150px] sm:min-h-[200px] placeholder:text-slate-500 focus:border-emerald-500 text-sm"
+                    className="text-slate-100 font-mono min-h-[150px] sm:min-h-[200px] placeholder:text-slate-500 text-sm"
+                    style={{
+                      backgroundColor: 'rgba(10, 13, 10, 0.5)',
+                      backdropFilter: 'blur(2px)',
+                      WebkitBackdropFilter: 'blur(2px)',
+                      boxShadow: '0 2px 20px rgba(16, 185, 129, 0.15)',
+                      border: '1px solid #093d0f',
+                    }}
                   />
                   <p className="text-xs text-slate-400 mt-2 font-mono">
                     Paste the complete email including all headers and body content
@@ -467,17 +451,26 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
                 </Button>
               </div>
             </Card>
-          </TabsContent>
-        </Tabs>
+          </div>
 
         {/* Analysis Progress */}
         {analyzing && (
           <motion.div
+            ref={analyzingRef}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="max-w-4xl mx-auto mt-8"
           >
-            <Card className="bg-slate-900/80 border-emerald-500/30 p-12 shadow-lg shadow-emerald-500/10 flex flex-col items-center justify-center min-h-[300px]">
+            <Card 
+              className="p-12 flex flex-col items-center justify-center min-h-[300px]"
+              style={{
+                backgroundColor: 'rgba(10, 13, 10, 0.5)',
+                backdropFilter: 'blur(2px)',
+                WebkitBackdropFilter: 'blur(2px)',
+                boxShadow: '0 2px 20px rgba(16, 185, 129, 0.15)',
+                border: '1px solid #093d0f',
+              }}
+            >
               <div className="flex flex-col items-center gap-6">
                 <div className="animate-spin rounded-full h-16 w-16 border-4 border-emerald-500 border-t-transparent"></div>
                 <h3 className="text-2xl text-slate-50 font-mono">
@@ -494,17 +487,23 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
         {/* Results */}
         {result && !analyzing && (
           <motion.div
+            ref={resultRef}
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             className="max-w-4xl mx-auto mt-4 sm:mt-8"
           >
-            <Card className={`border-2 p-4 sm:p-6 md:p-8 ${
-              result.isPhishing
-                ? 'bg-red-950/20 border-red-500'
-                : 'bg-green-950/20 border-green-500'
-            }`}>
-              <div className="flex flex-col sm:flex-row items-start gap-4 mb-4 sm:mb-6">
-                <div className="flex items-center gap-4 w-full sm:w-auto">
+            <Card 
+              className="p-4 sm:p-6 md:p-8"
+              style={{
+                backgroundColor: 'rgba(10, 13, 10, 0.5)',
+                backdropFilter: 'blur(2px)',
+                WebkitBackdropFilter: 'blur(2px)',
+                boxShadow: '0 2px 20px rgba(16, 185, 129, 0.15)',
+                border: '1px solid #093d0f',
+              }}
+            >
+              <div className="flex items-start gap-4 mb-2">
+                <div className="flex items-center gap-4 w-full">
                   {result.isPhishing ? (
                     <XCircle className="w-12 h-12 sm:w-16 sm:h-16 text-red-500 flex-shrink-0" />
                   ) : (
@@ -512,7 +511,7 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
                   )}
 
                   <div className="flex-1 min-w-0">
-                    <h2 className={`text-xl sm:text-2xl md:text-3xl mb-2 ${result.isPhishing ? 'text-red-400' : 'text-emerald-400'}`}>
+                    <h2 className={`text-xl sm:text-2xl md:text-3xl mb-1 ${result.isPhishing ? 'text-red-400' : 'text-emerald-400'}`}>
                       {result.isPhishing ? 'THREAT DETECTED' : 'APPEARS SAFE'}
                     </h2>
                     <p className="text-sm sm:text-base md:text-lg text-slate-200">
@@ -520,14 +519,7 @@ export function PhishingChecker({ onBack }: PhishingCheckerProps) {
                     </p>
                   </div>
                 </div>
-
-                <Badge className={`${getThreatColor(result.threatLevel)} border-current text-sm sm:text-base md:text-lg px-3 sm:px-4 py-1 sm:py-2 self-start sm:self-center`}>
-                  <AlertTriangle className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                  {result.threatLevel.toUpperCase()}
-                </Badge>
               </div>
-
-                <Progress value={result.confidence} className="mb-3 h-2 sm:h-3" />
 
               <div className={`p-3 sm:p-4 rounded-lg border ${
                  result.isPhishing

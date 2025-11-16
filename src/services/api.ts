@@ -29,6 +29,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
 
 // ML Model Service
 export const mlService = {
+  // For email analysis - uses external ML API
   predictPhishing: async (rawEmail: string): Promise<MLPredictResponse> => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
@@ -66,7 +67,7 @@ export const mlService = {
 // SecureBeacon Backend Service
 export const backendService = {
   saveResults: async (
-    inputType: 'url' | 'header' | 'eml',
+    inputType: 'header' | 'eml',
     inputContent: string, // Encrypted JSON string
     mlResult: string, // Encrypted JSON string
     userEmail: string, // Encrypted JSON string

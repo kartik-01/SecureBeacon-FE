@@ -1,6 +1,6 @@
-# PhishSafe
+# SecureBeacon
 
-Intelligent Email Protection System built with React, TypeScript, Tailwind CSS, and Vite.
+Advanced Phishing Threat Detection System built with React, TypeScript, Tailwind CSS, and Vite. Scan URLs and analyze email headers for phishing threats with AI-powered detection.
 
 ## Features
 
@@ -104,7 +104,7 @@ src/
 The app integrates with two backend services:
 
 1. **ML Model API** (`VITE_ML_API_URL`): Provides phishing detection predictions
-2. **PhishWatch Backend** (`VITE_BACKEND_URL`): Stores analysis history for authenticated users
+2. **SecureBeacon Backend** (`VITE_BACKEND_URL`): Stores analysis history for authenticated users
 
 See `reference/phishsafe.txt` for detailed API contracts.
 
@@ -114,7 +114,7 @@ See `reference/phishsafe.txt` for detailed API contracts.
 - `VITE_AUTH0_CLIENT_ID`: Your Auth0 client ID (optional for mock mode)
 - `VITE_AUTH0_AUDIENCE`: Your Auth0 API audience (optional for mock mode)
 - `VITE_ML_API_URL`: ML Model API base URL (optional for mock mode)
-- `VITE_BACKEND_URL`: PhishWatch Backend base URL (optional for mock mode)
+- `VITE_BACKEND_URL`: SecureBeacon Backend base URL (optional for mock mode)
 - `VITE_USE_MOCK_DATA`: Set to `true` to use mock API responses (default: `true` if APIs not configured)
 - `VITE_USE_MOCK_AUTH`: Set to `true` to use mock authentication (default: `true` if Auth0 not configured)
 

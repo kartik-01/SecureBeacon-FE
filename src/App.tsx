@@ -1,7 +1,6 @@
 import { useState, useEffect, useLayoutEffect } from 'react';
 import { LandingPage } from './components/LandingPage';
 import { PhishingChecker } from './components/PhishingChecker';
-import { AuthModal } from './components/AuthModal';
 import { EncryptionSetup } from './components/EncryptionSetup';
 import EncryptionUnlock from './components/EncryptionUnlock';
 import { useAuth } from './contexts/AuthContext';
@@ -11,10 +10,9 @@ import { Toaster } from 'sonner';
 type View = 'landing' | 'checker';
 
 export default function App() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, loginWithRedirect } = useAuth();
   const { isSetup, isUnlocked, isLoading: encryptionLoading, hasCompletedInitialCheck } = useEncryption();
   const [view, setView] = useState<View>('landing');
-  const [showAuthModal, setShowAuthModal] = useState(false);
   const [showEncryptionSetup, setShowEncryptionSetup] = useState(false);
 
   // Redirect to checker after login
@@ -32,9 +30,14 @@ export default function App() {
     setView('landing');
   };
 
-  const handleAuthSuccess = () => {
-    setShowAuthModal(false);
-    setView('checker');
+  const handleAuth = () => {
+    // Direct redirect to Auth0 (no modal)
+    loginWithRedirect({
+      authorizationParams: {
+        redirect_uri: window.location.origin,
+        audience: import.meta.env.VITE_AUTH0_AUDIENCE,
+      },
+    });
   };
 
   // Show encryption setup if authenticated but not setup (only when on checker view)
@@ -102,19 +105,14 @@ export default function App() {
       {view === 'landing' ? (
         <LandingPage 
           onStartCheck={handleStartCheck}
-          onAuth={() => setShowAuthModal(true)}
+          onAuth={handleAuth}
         />
       ) : (
         <PhishingChecker 
           onBack={handleBack}
+          onAuth={handleAuth}
         />
       )}
-
-      <AuthModal 
-        open={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-        onAuthSuccess={handleAuthSuccess}
-      />
 
       {isAuthenticated && !encryptionLoading && hasCompletedInitialCheck && (
         <>
@@ -131,12 +129,17 @@ export default function App() {
       <Toaster 
         position="top-right"
         theme="dark"
+        offset="80px"
         toastOptions={{
           style: {
             background: '#1e293b',
             border: '1px solid #10b981',
             color: '#10b981',
+            zIndex: 40,
           },
+        }}
+        style={{
+          zIndex: 40,
         }}
       />
     </>
