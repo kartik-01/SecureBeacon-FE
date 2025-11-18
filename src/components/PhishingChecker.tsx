@@ -25,6 +25,7 @@ export function PhishingChecker({ onBack, onAuth }: PhishingCheckerProps) {
   const { encryptData, isUnlocked, isSetup } = useEncryption();
   const [emailContent, setEmailContent] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileContent, setFileContent] = useState<string>(''); // Store file content for header parsing
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<AnalysisResultUI | null>(null);
   const [showHistory, setShowHistory] = useState(false);
@@ -204,6 +205,9 @@ export function PhishingChecker({ onBack, onAuth }: PhishingCheckerProps) {
           return;
         }
         content = await selectedFile.text();
+        setFileContent(content); // Store file content for header parsing
+      } else {
+        setFileContent(''); // Clear file content if using text input
       }
 
       // Always call ML API first
@@ -266,6 +270,7 @@ export function PhishingChecker({ onBack, onAuth }: PhishingCheckerProps) {
     if (file) {
       setSelectedFile(file);
       setEmailContent(''); // Clear text content when file is selected
+      setFileContent(''); // Clear previous file content
     }
   };
 
@@ -277,34 +282,103 @@ export function PhishingChecker({ onBack, onAuth }: PhishingCheckerProps) {
     }
   };
 
-  const getResultMessage = (isPhishing: boolean, threatLevel: string): { title: string; message: string } => {
+  // Parse email headers from content
+  const parseEmailHeaders = (content: string) => {
+    const headers: Record<string, string> = {};
+    const lines = content.split('\n');
+    let currentHeader = '';
+    let currentValue = '';
+    let headerEnded = false;
+
+    for (const line of lines) {
+      if (headerEnded) break;
+      
+      // Check if line starts a new header (contains colon and not indented)
+      if (line.includes(':') && !line.match(/^\s/)) {
+        // Save previous header
+        if (currentHeader) {
+          headers[currentHeader.toLowerCase()] = currentValue.trim();
+        }
+        // Start new header
+        const [header, ...valueParts] = line.split(':');
+        currentHeader = header.trim();
+        currentValue = valueParts.join(':').trim();
+      } else if (currentHeader && (line.match(/^\s/) || line.match(/^\t/))) {
+        // Continuation of previous header (indented)
+        currentValue += ' ' + line.trim();
+      } else if (line.trim() === '') {
+        // Empty line marks end of headers
+        if (currentHeader) {
+          headers[currentHeader.toLowerCase()] = currentValue.trim();
+          currentHeader = '';
+          currentValue = '';
+        }
+        headerEnded = true;
+      } else if (currentHeader) {
+        // Save current header if we hit non-header content
+        headers[currentHeader.toLowerCase()] = currentValue.trim();
+        currentHeader = '';
+        currentValue = '';
+      }
+    }
+
+    // Save last header
+    if (currentHeader) {
+      headers[currentHeader.toLowerCase()] = currentValue.trim();
+    }
+
+    return {
+      from: headers['from'] || 'Unknown',
+      subject: headers['subject'] || 'No Subject',
+      messageId: headers['message-id'] || headers['messageid'] || 'N/A',
+      to: headers['to'] || headers['delivered-to'] || 'N/A',
+    };
+  };
+
+  const getResultMessage = (isPhishing: boolean, threatLevel: string, confidence: number, emailContent?: string): { title: string; message: string } => {
+    // Parse email headers if content is available
+    let emailInfo = '';
+    if (emailContent) {
+      try {
+        const headers = parseEmailHeaders(emailContent);
+        // Extract just the email address from From field (remove display name if present)
+        const fromEmail = headers.from.match(/<([^>]+)>/) 
+          ? headers.from.match(/<([^>]+)>/)![1] 
+          : headers.from.split(' ').pop() || headers.from;
+        
+        emailInfo = `\n\nEmail Details:\n• From: ${fromEmail}\n• Subject: ${headers.subject}`;
+      } catch (e) {
+        // If parsing fails, continue without header info
+      }
+    }
+
     if (isPhishing) {
       switch (threatLevel) {
         case 'critical':
           return {
             title: '🚨 CRITICAL THREAT',
-            message: 'This email is highly likely to be a phishing attempt. Do NOT click any links, download attachments, or provide personal information. Delete this email immediately and report it as spam/phishing to your email provider.',
+            message: `Do NOT click any links, download attachments, or provide personal information. Delete this email immediately and report it as spam/phishing to your email provider.${emailInfo}`,
           };
         case 'high':
           return {
             title: '⚠️ HIGH RISK',
-            message: 'This email shows strong indicators of being phishing. Exercise extreme caution. Do not click links or provide any sensitive information. Verify the sender through official channels before responding.',
+            message: `Exercise extreme caution. Do not click links or provide any sensitive information. Verify the sender through official channels before responding.${emailInfo}`,
           };
         case 'medium':
           return {
             title: '⚠️ SUSPICIOUS',
-            message: 'This email contains some phishing indicators. Be careful when interacting with it. Avoid clicking unfamiliar links and never share sensitive data through email.',
+            message: `Be careful when interacting with it. Avoid clicking unfamiliar links and never share sensitive data through email.${emailInfo}`,
           };
         default:
           return {
             title: '⚠️ LOW RISK PHISHING',
-            message: 'This email may contain phishing elements. Review it carefully before taking any action. When in doubt, verify the sender through official channels.',
+            message: `Review it carefully before taking any action. When in doubt, verify the sender through official channels.${emailInfo}`,
           };
       }
     } else {
       return {
         title: '✅ APPEARS LEGITIMATE',
-        message: 'This email appears to be safe based on our analysis. However, always exercise caution and verify requests for sensitive information. Stay vigilant against social engineering tactics.',
+        message: `This email has a ${(100 - confidence).toFixed(1)}% chance of being legitimate based on our analysis. However, always exercise caution and verify requests for sensitive information. Stay vigilant against social engineering tactics.${emailInfo}`,
       };
     }
   };
@@ -476,9 +550,6 @@ export function PhishingChecker({ onBack, onAuth }: PhishingCheckerProps) {
                 <h3 className="text-2xl text-slate-50 font-mono">
                   <LetterGlitch text="ANALYZING THREAT..." glitchIntensity={0.15} />
                 </h3>
-                <p className="text-slate-300 font-mono text-sm">
-                  Running neural network analysis...
-                </p>
               </div>
             </Card>
           </motion.div>
@@ -515,7 +586,10 @@ export function PhishingChecker({ onBack, onAuth }: PhishingCheckerProps) {
                       {result.isPhishing ? 'THREAT DETECTED' : 'APPEARS SAFE'}
                     </h2>
                     <p className="text-sm sm:text-base md:text-lg text-slate-200">
-                      Confidence: {result.confidence.toFixed(1)}%
+                      {result.isPhishing 
+                        ? `This email has a ${result.confidence.toFixed(1)}% chance of being a phishing attempt.`
+                        : `This email has a ${(100 - result.confidence).toFixed(1)}% chance of being legitimate.`
+                      }
                     </p>
                   </div>
                 </div>
@@ -529,10 +603,10 @@ export function PhishingChecker({ onBack, onAuth }: PhishingCheckerProps) {
                 <h3 className={`text-base sm:text-lg font-mono mb-2 sm:mb-3 ${
                   result.isPhishing ? 'text-red-300' : 'text-green-300'
                 }`}>
-                  {getResultMessage(result.isPhishing, result.threatLevel).title}
+                  {getResultMessage(result.isPhishing, result.threatLevel, result.confidence, selectedFile ? fileContent : emailContent).title}
                 </h3>
-                <p className="text-slate-100 leading-relaxed font-mono text-xs sm:text-sm">
-                  {getResultMessage(result.isPhishing, result.threatLevel).message}
+                <p className="text-slate-100 leading-relaxed font-mono text-xs sm:text-sm whitespace-pre-line">
+                  {getResultMessage(result.isPhishing, result.threatLevel, result.confidence, selectedFile ? fileContent : emailContent).message}
                 </p>
               </div>
             </Card>
